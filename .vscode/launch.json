@@ -1,0 +1,53 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Extension (sample fixture)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "${workspaceFolder}/test-fixture",
+        "--extensionDevelopmentPath=${workspaceFolder}"
+      ],
+      "outFiles": ["${workspaceFolder}/out/**/*.js"],
+      "preLaunchTask": "npm: compile"
+    },
+    {
+      "name": "Run Extension (pick a project)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "${input:projectPath}",
+        "--extensionDevelopmentPath=${workspaceFolder}"
+      ],
+      "outFiles": ["${workspaceFolder}/out/**/*.js"],
+      "preLaunchTask": "npm: compile"
+    },
+    {
+      "name": "Run Extension (empty)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
+      "outFiles": ["${workspaceFolder}/out/**/*.js"],
+      "preLaunchTask": "npm: compile"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "projectPath",
+      "type": "pickString",
+      "description": "Which Vue project should the Extension Development Host open?",
+      "options": [
+        "/Users/tyler/projects/reka-ui",
+        "/Users/tyler/projects/reka-ui-vue2",
+        "/Users/tyler/projects/vue-2-playground",
+        "/Users/tyler/projects/patco-hub",
+        "/Users/tyler/projects/storybook-vue-addon",
+        "/Users/tyler/projects/vue-macros",
+        "/Users/tyler/projects/vue-upgrade-tool",
+        "/Users/tyler/glasshive/vue-honey-crm"
+      ],
+      "default": "/Users/tyler/projects/vue-2-playground"
+    }
+  ]
+}

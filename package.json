@@ -1,0 +1,112 @@
+{
+  "name": "vue-find-usages",
+  "displayName": "Vue: Find Component Usages",
+  "description": "Find all usages of a Vue component across your workspace (template tags, imports, and registrations).",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "vue",
+    "component",
+    "references",
+    "find usages",
+    "cursor"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "workspaceContains:**/*.vue",
+    "onLanguage:vue"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "vueFindUsages.findUsages",
+        "title": "Vue: Find Component Usages"
+      },
+      {
+        "command": "vueFindUsages.indexProject",
+        "title": "Vue: Index Component Usages (rebuild)"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "vueFindUsages.findUsages",
+          "when": "resourceExtname == .vue",
+          "group": "navigation@99"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "vueFindUsages.findUsages",
+          "when": "resourceExtname == .vue",
+          "group": "4_search@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "vueFindUsages.findUsages"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Vue: Find Component Usages",
+      "properties": {
+        "vueFindUsages.include": {
+          "type": "string",
+          "default": "**/*.{vue,js,ts,jsx,tsx,mjs,cjs}",
+          "description": "Glob pattern for files to search for usages."
+        },
+        "vueFindUsages.exclude": {
+          "type": "string",
+          "default": "**/{node_modules,dist,.git,.nuxt,.output,coverage}/**",
+          "description": "Glob pattern for files/folders to exclude from the search."
+        },
+        "vueFindUsages.includeImports": {
+          "type": "boolean",
+          "default": true,
+          "description": "Also report import statements and component registrations, not just template tag usages."
+        },
+        "vueFindUsages.indexOnOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Index all component usages once when a project opens, so the CodeLens and Find All References resolve instantly. Turn off to scan lazily on demand instead."
+        },
+        "vueFindUsages.codeLens.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a CodeLens with the usage count above <template> in each .vue file."
+        },
+        "vueFindUsages.references.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Contribute Vue component usages to 'Find All References' (Shift+F12)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "dependencies": {
+    "@babel/parser": "^7.24.0",
+    "@babel/traverse": "^7.24.0",
+    "@babel/types": "^7.24.0",
+    "@vue/compiler-dom": "^3.4.0",
+    "@vue/compiler-sfc": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/babel__traverse": "^7.20.5",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^5.4.0"
+  }
+}
