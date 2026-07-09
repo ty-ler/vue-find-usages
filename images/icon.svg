@@ -1,0 +1,20 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- card -->
+  <rect x="0" y="0" width="128" height="128" rx="28" fill="#42B883"/>
+
+  <!-- Vue-style chevron -->
+  <path d="M30 38 L49 38 L64 66 L79 38 L98 38 L64 100 Z" fill="#ffffff"/>
+  <!-- inner fold accent -->
+  <path d="M49 38 L64 66 L79 38 L71 38 L64 52 L57 38 Z" fill="#35495E" opacity="0.28"/>
+
+  <!-- lucide search: dark rim for separation, green mask over the chevron, white on top -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="88" cy="88" r="14.5" stroke="#2b3a4a" stroke-width="9"/>
+    <line x1="98.3" y1="98.3" x2="106.5" y2="106.5" stroke="#2b3a4a" stroke-width="10"/>
+  </g>
+  <circle cx="88" cy="88" r="14.5" fill="#42B883"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="88" cy="88" r="14.5" stroke="#ffffff" stroke-width="5.5"/>
+    <line x1="98.3" y1="98.3" x2="106.5" y2="106.5" stroke="#ffffff" stroke-width="5.5"/>
+  </g>
+</svg>
