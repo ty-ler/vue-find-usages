@@ -9,9 +9,13 @@ test-fixture/**
 # icon source (only the PNG ships)
 images/icon.svg
 
-# never package scripts or secrets
-publish.sh
-*.sh
-.env
-.env.*
+# never package scripts, secrets, or build artifacts (match nested paths too)
+**/*.sh
+**/.env
+**/.env.*
 **/*.vsix
+vue-find-usages-*/**
+
+# archives / build leftovers
+**/*.zip
+vue-find-usages-*.zip

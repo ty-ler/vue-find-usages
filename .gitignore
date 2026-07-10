@@ -21,3 +21,6 @@ npm-debug.log*
 Thumbs.db
 
 publish.sh
+# extracted vsix dirs
+vue-find-usages-*/
+*.zip
