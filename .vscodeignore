@@ -8,3 +8,10 @@ test-fixture/**
 
 # icon source (only the PNG ships)
 images/icon.svg
+
+# never package scripts or secrets
+publish.sh
+*.sh
+.env
+.env.*
+**/*.vsix
