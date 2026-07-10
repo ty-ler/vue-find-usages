@@ -64,8 +64,8 @@ async function rebuildIndex(announce: boolean): Promise<void> {
       cancellable: true,
     },
     (progress, token) =>
-      buildProjectIndex(getScanOptions(), token, (processed, total, found) => {
-        progress.report({ message: `${processed}/${total} files, ${found} usages` });
+      buildProjectIndex(getScanOptions(), token, (processed, total) => {
+        progress.report({ message: `${processed}/${total} files` });
       }).then((result) => (token.isCancellationRequested ? undefined : result)),
   );
 
