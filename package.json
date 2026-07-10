@@ -2,7 +2,7 @@
   "name": "vue-find-usages",
   "displayName": "Vue: Find Component Usages",
   "description": "Find all usages of a Vue component across your workspace (template tags, imports, and registrations).",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "ty-ler",
   "license": "MIT",
   "icon": "images/icon.png",
