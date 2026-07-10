@@ -26,6 +26,9 @@ export interface IndexedUsage {
   usage: Usage;
 }
 
+/** Decides whether a non-`.vue` import specifier points at a Vue component. */
+export type ImportResolver = (importerFsPath: string, specifier: string) => boolean;
+
 /**
  * A callback that records one usage under a component name (plus any alternate
  * names — e.g. an import's local name, imported name, and file stem — so a
@@ -46,9 +49,13 @@ type Collect = (
  * `components: {}` registrations. Best-effort: a syntax error in one block never
  * aborts the scan. This is the one pass the whole-project index is built from.
  */
-export function extractComponentUsages(document: vscode.TextDocument): IndexedUsage[] {
+export function extractComponentUsages(
+  document: vscode.TextDocument,
+  resolver?: ImportResolver,
+): IndexedUsage[] {
   const text = document.getText();
-  const ext = path.extname(document.uri.fsPath).toLowerCase();
+  const importer = document.uri.fsPath;
+  const ext = path.extname(importer).toLowerCase();
   const out: IndexedUsage[] = [];
 
   const collect: Collect = (displayName, kind, absStart, absEnd, altNames = []) => {
@@ -78,9 +85,9 @@ export function extractComponentUsages(document: vscode.TextDocument): IndexedUs
   };
 
   if (ext === '.vue') {
-    scanVue(text, collect);
+    scanVue(text, collect, importer, resolver);
   } else {
-    scanScript(text, 0, scriptPlugins(ext), collect);
+    scanScript(text, 0, scriptPlugins(ext), collect, importer, resolver);
   }
 
   return out;
@@ -94,12 +101,13 @@ export function extractComponentUsages(document: vscode.TextDocument): IndexedUs
 export function findUsagesInDocument(
   document: vscode.TextDocument,
   target: ComponentTarget,
+  resolver?: ImportResolver,
 ): Usage[] {
   const lower = document.getText().toLowerCase();
   if (!lower.includes(target.kebab) && !lower.includes(target.pascal.toLowerCase())) {
     return [];
   }
-  return extractComponentUsages(document)
+  return extractComponentUsages(document, resolver)
     .filter((u) => u.key === target.key)
     .map((u) => u.usage);
 }
@@ -246,7 +254,12 @@ function isImportedFromVue(scriptContent: string, word: string): boolean {
 
 /* ------------------------------- Vue SFC ------------------------------- */
 
-function scanVue(source: string, collect: Collect): void {
+function scanVue(
+  source: string,
+  collect: Collect,
+  importer: string,
+  resolver?: ImportResolver,
+): void {
   let descriptor;
   try {
     descriptor = parseSfc(source, { ignoreEmpty: true }).descriptor;
@@ -272,7 +285,7 @@ function scanVue(source: string, collect: Collect): void {
       continue;
     }
     const plugins = scriptPlugins('.' + (block.lang || 'js'));
-    scanScript(block.content, block.loc.start.offset, plugins, collect);
+    scanScript(block.content, block.loc.start.offset, plugins, collect, importer, resolver);
   }
 }
 
@@ -345,6 +358,8 @@ function scanScript(
   base: number,
   plugins: ParserPlugin[],
   collect: Collect,
+  importer: string,
+  resolver?: ImportResolver,
 ): void {
   if (!content) {
     return;
@@ -368,11 +383,18 @@ function scanScript(
       const isVue = /\.vue$/i.test(source);
       const stem = path.basename(source).replace(/\.\w+$/, '');
 
+      // A `.vue` import is unambiguously a component. For any other module, only
+      // count it if it actually resolves to a `.vue` file on disk (so a type like
+      // `import { Board } from '@/types/board'` is not mistaken for a component).
+      // Without a resolver, fall back to the "PascalCase local name" heuristic.
+      const isComponentImport =
+        isVue || (resolver ? resolver(importer, source) : undefined);
+
       for (const spec of node.specifiers) {
         const localName = spec.local.name;
-        // Keep the index lean: only index imports that are plausibly components
-        // — those from a `.vue` file, or with a PascalCase local name.
-        if (!isVue && !/^[A-Z]/.test(localName)) {
+        const keep =
+          isComponentImport ?? (!isVue ? /^[A-Z]/.test(localName) : true);
+        if (!keep) {
           continue;
         }
         let importedName = localName;
@@ -381,11 +403,11 @@ function scanScript(
         }
         const anchor = spec.local;
         if (anchor.start != null && anchor.end != null) {
-          // A lookup by local name, imported name, or file stem all resolve here.
-          collect(localName, 'import', base + anchor.start, base + anchor.end, [
-            importedName,
-            stem,
-          ]);
+          // Match by local and imported name. The file stem is only a reliable
+          // component signal for `.vue` imports — for other modules a path like
+          // '@/types/board' would falsely collide with a <board> component.
+          const altNames = isVue ? [importedName, stem] : [importedName];
+          collect(localName, 'import', base + anchor.start, base + anchor.end, altNames);
         }
       }
     },

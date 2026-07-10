@@ -17,6 +17,7 @@ import {
 const VUE_SELECTOR: vscode.DocumentSelector = { scheme: 'file', pattern: '**/*.vue' };
 
 let usageIndex: UsageIndex;
+let activeIndexingCts: vscode.CancellationTokenSource | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
   usageIndex = new UsageIndex();
@@ -33,6 +34,9 @@ export function activate(context: vscode.ExtensionContext) {
     ),
     vscode.commands.registerCommand('vueFindUsages.indexProject', () =>
       rebuildIndex(true),
+    ),
+    vscode.commands.registerCommand('vueFindUsages.cancelIndexing', () =>
+      activeIndexingCts?.cancel(),
     ),
     vscode.languages.registerReferenceProvider(
       VUE_SELECTOR,
@@ -55,21 +59,39 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() {}
 
-/** (Re)builds the whole-project index, showing progress. */
+/**
+ * (Re)builds the whole-project index. Progress is shown as an unobtrusive status
+ * bar item rather than a blocking notification, so indexing runs in the
+ * background; clicking the item cancels the run.
+ */
 async function rebuildIndex(announce: boolean): Promise<void> {
-  const map = await vscode.window.withProgress(
-    {
-      location: vscode.ProgressLocation.Notification,
-      title: 'Indexing Vue component usages',
-      cancellable: true,
-    },
-    (progress, token) =>
-      buildProjectIndex(getScanOptions(), token, (processed, total) => {
-        progress.report({ message: `${processed}/${total} files` });
-      }).then((result) => (token.isCancellationRequested ? undefined : result)),
-  );
+  // Supersede any indexing already in flight.
+  activeIndexingCts?.cancel();
+  const cts = new vscode.CancellationTokenSource();
+  activeIndexingCts = cts;
 
-  if (!map) {
+  const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+  status.command = 'vueFindUsages.cancelIndexing';
+  status.tooltip = 'Vue: Find Component Usages — click to cancel indexing';
+  status.text = '$(sync~spin) Indexing Vue usages…';
+  status.show();
+
+  let map: Map<string, Usage[]> | undefined;
+  try {
+    map = await buildProjectIndex(getScanOptions(), cts.token, (processed, total) => {
+      status.text = `$(sync~spin) Indexing Vue usages ${processed}/${total}`;
+    });
+  } catch {
+    map = undefined; // aborted or failed — fall back to lazy mode.
+  } finally {
+    status.dispose();
+    cts.dispose();
+    if (activeIndexingCts === cts) {
+      activeIndexingCts = undefined;
+    }
+  }
+
+  if (cts.token.isCancellationRequested || !map) {
     return; // cancelled — stay in lazy mode.
   }
   usageIndex.replaceAll(map);

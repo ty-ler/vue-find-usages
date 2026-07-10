@@ -106,7 +106,8 @@
     "watch": "tsc -watch -p ./",
     "package": "vsce package",
     "publish:vsce": "vsce publish",
-    "publish:ovsx": "ovsx publish"
+    "publish:ovsx": "ovsx publish",
+    "publish:all": "npm run compile && vsce publish && ovsx publish"
   },
   "dependencies": {
     "@babel/parser": "^7.24.0",

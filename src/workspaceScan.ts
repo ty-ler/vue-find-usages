@@ -3,14 +3,17 @@ import { ComponentTarget } from './names';
 import {
   extractComponentUsages,
   findUsagesInDocument,
+  ImportResolver,
   IndexedUsage,
   Usage,
 } from './scanner';
+import { clearResolveCache, importResolvesToVue } from './resolve';
 
 export interface ScanOptions {
   include: string;
   exclude: string;
   includeImports: boolean;
+  resolver: ImportResolver;
 }
 
 export function getScanOptions(): ScanOptions {
@@ -19,6 +22,7 @@ export function getScanOptions(): ScanOptions {
     include: config.get<string>('include', '**/*.{vue,js,ts,jsx,tsx,mjs,cjs}'),
     exclude: config.get<string>('exclude', '**/{node_modules,dist,.git}/**'),
     includeImports: config.get<boolean>('includeImports', true),
+    resolver: importResolvesToVue,
   };
 }
 
@@ -61,7 +65,7 @@ export async function scanWorkspace(
       continue;
     }
 
-    for (const usage of findUsagesInDocument(document, target)) {
+    for (const usage of findUsagesInDocument(document, target, options.resolver)) {
       if (isFilteredOut(usage, options)) {
         continue;
       }
@@ -77,7 +81,9 @@ export function indexUsagesForDocument(
   document: vscode.TextDocument,
   options: ScanOptions,
 ): IndexedUsage[] {
-  return extractComponentUsages(document).filter((u) => !isFilteredOut(u.usage, options));
+  return extractComponentUsages(document, options.resolver).filter(
+    (u) => !isFilteredOut(u.usage, options),
+  );
 }
 
 /**
@@ -96,6 +102,8 @@ export async function buildProjectIndex(
     undefined,
     token,
   );
+
+  clearResolveCache();
 
   const index = new Map<string, Usage[]>();
   let processed = 0;

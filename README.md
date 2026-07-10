@@ -20,7 +20,11 @@ forms resolve to one component — and a lookup for `Foo` will **not** falsely m
   `<component :is="'MyComponent'">` with a literal name. Genuinely dynamic bindings
   like `:is="someVar"` are correctly left out.
 - **Imports** — `import MyComponent from './MyComponent.vue'`, aliased and named
-  imports included (matched by local name, imported name, or file stem).
+  imports included. A `.vue` import always counts; a non-`.vue` import counts only
+  if its path actually resolves to a `.vue` file on disk (relative paths and
+  `tsconfig`/`jsconfig` `paths` aliases are resolved), so a type like
+  `import { Board } from '@/types/board'` is never mistaken for the `<Board>`
+  component.
 - **Registrations** — `components: { MyComponent }` and `{ Alias: MyComponent }` in
   the Options API.
 
@@ -117,8 +121,10 @@ both VS Code and Cursor).
 - **Dynamic `:is` with a non-literal expression** (`<component :is="current">`)
   cannot be resolved to a specific component — only static strings and string
   literals are.
-- **Aliased barrel re-exports** (`export { default as Foo } from '...'` chains) are
-  not followed; imports are matched by their local/imported name and file stem.
+- **Bare and unresolvable imports** aren't counted — a non-`.vue` import is only
+  treated as a component if its path resolves to a `.vue` file, so barrel
+  re-exports (`import { Foo } from '@/components'` pointing at an `index.ts`) and
+  package imports are skipped.
 - Name resolution is by component name, so two different components that share a
   name in different folders are treated as the same for lookup purposes.
 
