@@ -19,6 +19,9 @@ forms resolve to one component — and a lookup for `Foo` will **not** falsely m
 - **Dynamic components** — `<component is="MyComponent">` and
   `<component :is="'MyComponent'">` with a literal name. Genuinely dynamic bindings
   like `:is="someVar"` are correctly left out.
+- **Lazy / dynamic imports** — `() => import('./MyComponent.vue')` in async
+  components, `defineAsyncComponent`, and vue-router route definitions, matched by
+  the imported file's path.
 - **Imports** — `import MyComponent from './MyComponent.vue'`, aliased and named
   imports included. A `.vue` import always counts; a non-`.vue` import counts only
   if its path actually resolves to a `.vue` file on disk (relative paths and

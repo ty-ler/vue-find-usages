@@ -280,18 +280,14 @@ async function statMtime(fsPath: string): Promise<number | null> {
   }
 }
 
+const IMPORT_KINDS = new Set(['import', 'dynamic-import', 'registration']);
+
 function isFilteredOut(usage: Usage, options: ScanOptions): boolean {
-  return (
-    !options.includeImports &&
-    (usage.kind === 'import' || usage.kind === 'registration')
-  );
+  return !options.includeImports && IMPORT_KINDS.has(usage.kind);
 }
 
 function isRawFilteredOut(raw: RawUsage, options: ScanOptions): boolean {
-  return (
-    !options.includeImports &&
-    (raw.kind === 'import' || raw.kind === 'registration')
-  );
+  return !options.includeImports && IMPORT_KINDS.has(raw.kind);
 }
 
 /**

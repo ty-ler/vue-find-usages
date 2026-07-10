@@ -11,7 +11,12 @@ import { componentBaseName, isComponentFile } from './componentExt';
 // `.default` in some resolutions and is the module itself in others.
 const traverse = ((_traverse as any).default ?? _traverse) as typeof _traverse;
 
-export type UsageKind = 'tag' | 'dynamic-is' | 'import' | 'registration';
+export type UsageKind =
+  | 'tag'
+  | 'dynamic-is'
+  | 'import'
+  | 'dynamic-import'
+  | 'registration';
 
 /** Decides whether a non-`.vue` import specifier points at a Vue component. */
 export type ImportResolver = (importerFsPath: string, specifier: string) => boolean;
@@ -249,6 +254,34 @@ function scanScript(
   }
 
   traverse(ast, {
+    // Dynamic / lazy imports: `() => import('./Foo.vue')`, in async components,
+    // vue-router routes, defineAsyncComponent, etc. Keyed by the file stem since
+    // a dynamic import has no local name.
+    CallExpression(pathNode) {
+      const node = pathNode.node;
+      if (!t.isImport(node.callee)) {
+        return;
+      }
+      const arg = node.arguments[0];
+      if (!t.isStringLiteral(arg)) {
+        return;
+      }
+      const source = arg.value;
+      const isComponentSource = isComponentFile(source);
+      const resolves =
+        isComponentSource || (resolver ? resolver(importer, source) : false);
+      if (!resolves) {
+        return;
+      }
+      const stem = isComponentSource
+        ? componentBaseName(source)
+        : path.basename(source).replace(/\.\w+$/, '');
+      if (arg.start != null && arg.end != null) {
+        // Highlight the path text inside the quotes.
+        collect(stem, 'dynamic-import', base + arg.start + 1, base + arg.end - 1);
+      }
+    },
+
     ImportDeclaration(pathNode) {
       const node = pathNode.node;
       const source = node.source.value;

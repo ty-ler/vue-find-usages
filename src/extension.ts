@@ -252,6 +252,7 @@ const KIND_LABEL: Record<UsageKind, string> = {
   tag: 'template tag',
   'dynamic-is': 'dynamic <component :is>',
   import: 'import',
+  'dynamic-import': 'dynamic import',
   registration: 'registration',
 };
 
