@@ -7,8 +7,11 @@ import {
   findUsagesInDocument,
   ImportResolver,
   IndexedUsage,
+  rawToUsage,
   Usage,
 } from './scanner';
+import { extractRawUsages, RawUsage } from './scanCore';
+import { IndexCache } from './indexCache';
 import { clearResolveCache, importResolvesToVue } from './resolve';
 
 export interface ScanOptions {
@@ -108,12 +111,16 @@ export function indexUsagesForFile(
 
 /**
  * Builds the whole-project index in one pass: every file is read and parsed once
- * and every component usage is grouped by its normalized key.
+ * and every component usage is grouped by its normalized key. When a cache is
+ * supplied, files whose mtime is unchanged are served from it instead of being
+ * re-parsed (`force` re-parses everything and refreshes the cache).
  */
 export async function buildProjectIndex(
   options: ScanOptions,
   token?: vscode.CancellationToken,
   onProgress?: ProgressReporter,
+  cache?: IndexCache,
+  force = false,
 ): Promise<Map<string, Usage[]>> {
   clearResolveCache();
 
@@ -125,6 +132,7 @@ export async function buildProjectIndex(
   );
 
   const index = new Map<string, Usage[]>();
+  const seen = new Set<string>();
   let processed = 0;
   let total = 0;
 
@@ -132,19 +140,37 @@ export async function buildProjectIndex(
     files,
     READ_CONCURRENCY,
     async (file) => {
-      const text = await readFileText(file);
-      if (text != null) {
-        // The merge below is synchronous, so no locking is needed.
-        for (const { key, usage } of indexUsagesForFile(file, text, options)) {
-          const bucket = index.get(key);
-          if (bucket) {
-            bucket.push(usage);
-          } else {
-            index.set(key, [usage]);
-          }
-          total++;
+      const fsPath = file.fsPath;
+      seen.add(fsPath);
+
+      const mtime = cache ? await statMtime(fsPath) : null;
+      let raw: RawUsage[] | undefined;
+      if (cache && !force && mtime != null) {
+        raw = cache.get(fsPath, mtime);
+      }
+      if (raw === undefined) {
+        const text = await readFileText(file);
+        raw = text != null ? extractRawUsages(text, fsPath, options.resolver) : [];
+        if (cache && mtime != null) {
+          cache.set(fsPath, mtime, raw);
         }
       }
+
+      // The merge below is synchronous, so no locking is needed.
+      for (const r of raw) {
+        if (isRawFilteredOut(r, options)) {
+          continue;
+        }
+        const usage = rawToUsage(file, r);
+        const bucket = index.get(r.key);
+        if (bucket) {
+          bucket.push(usage);
+        } else {
+          index.set(r.key, [usage]);
+        }
+        total++;
+      }
+
       processed++;
       if (onProgress && processed % 25 === 0) {
         onProgress(processed, files.length, total);
@@ -153,13 +179,33 @@ export async function buildProjectIndex(
     token,
   );
 
+  // Only prune on a complete run — a cancelled run has an incomplete `seen` set.
+  if (cache && !token?.isCancellationRequested) {
+    cache.prune(seen);
+  }
+
   return index;
+}
+
+async function statMtime(fsPath: string): Promise<number | null> {
+  try {
+    return (await fsp.stat(fsPath)).mtimeMs;
+  } catch {
+    return null;
+  }
 }
 
 function isFilteredOut(usage: Usage, options: ScanOptions): boolean {
   return (
     !options.includeImports &&
     (usage.kind === 'import' || usage.kind === 'registration')
+  );
+}
+
+function isRawFilteredOut(raw: RawUsage, options: ScanOptions): boolean {
+  return (
+    !options.includeImports &&
+    (raw.kind === 'import' || raw.kind === 'registration')
   );
 }
 

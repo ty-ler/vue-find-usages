@@ -14,14 +14,24 @@ import {
   VueCodeLensProvider,
   VueReferenceProvider,
 } from './providers';
+import { IndexCache } from './indexCache';
 
 const VUE_SELECTOR: vscode.DocumentSelector = { scheme: 'file', pattern: '**/*.vue' };
 
 let usageIndex: UsageIndex;
+let usageCache: IndexCache | undefined;
 let activeIndexingCts: vscode.CancellationTokenSource | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
   usageIndex = new UsageIndex();
+
+  // Persistent cache so re-opening the project only re-parses changed files.
+  const storageBase = context.storageUri ?? context.globalStorageUri;
+  const version = context.extension?.packageJSON?.version ?? '0.0.0';
+  usageCache = new IndexCache(
+    vscode.Uri.joinPath(storageBase, 'index-cache.json'),
+    version,
+  );
 
   // Confirmation that the extension loaded. Appears in the Debug Console of the
   // window you launched from, and in Output → "Vue Find Usages".
@@ -34,7 +44,7 @@ export function activate(context: vscode.ExtensionContext) {
       findUsages(uri),
     ),
     vscode.commands.registerCommand('vueFindUsages.indexProject', () =>
-      rebuildIndex(true),
+      rebuildIndex(true, true),
     ),
     vscode.commands.registerCommand('vueFindUsages.cancelIndexing', () =>
       activeIndexingCts?.cancel(),
@@ -65,7 +75,7 @@ export function deactivate() {}
  * bar item rather than a blocking notification, so indexing runs in the
  * background; clicking the item cancels the run.
  */
-async function rebuildIndex(announce: boolean): Promise<void> {
+async function rebuildIndex(announce: boolean, force = false): Promise<void> {
   // Supersede any indexing already in flight.
   activeIndexingCts?.cancel();
   const cts = new vscode.CancellationTokenSource();
@@ -77,11 +87,25 @@ async function rebuildIndex(announce: boolean): Promise<void> {
   status.text = '$(sync~spin) Indexing Vue usages…';
   status.show();
 
+  if (usageCache) {
+    if (force) {
+      usageCache.clearEntries(); // ignore any cached parse and re-scan everything
+    } else {
+      await usageCache.load();
+    }
+  }
+
   let map: Map<string, Usage[]> | undefined;
   try {
-    map = await buildProjectIndex(getScanOptions(), cts.token, (processed, total) => {
-      status.text = `$(sync~spin) Indexing Vue usages ${processed}/${total}`;
-    });
+    map = await buildProjectIndex(
+      getScanOptions(),
+      cts.token,
+      (processed, total) => {
+        status.text = `$(sync~spin) Indexing Vue usages ${processed}/${total}`;
+      },
+      usageCache,
+      force,
+    );
   } catch {
     map = undefined; // aborted or failed — fall back to lazy mode.
   } finally {
@@ -96,6 +120,9 @@ async function rebuildIndex(announce: boolean): Promise<void> {
     return; // cancelled — stay in lazy mode.
   }
   usageIndex.replaceAll(map);
+  if (usageCache) {
+    void usageCache.save();
+  }
   getOutputChannel().appendLine(
     `[vue-find-usages] indexed ${map.size} component(s)`,
   );
