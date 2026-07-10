@@ -12,12 +12,14 @@ import {
 } from './scanner';
 import { extractRawUsages, RawUsage } from './scanCore';
 import { IndexCache } from './indexCache';
+import { ParsePool, recommendedWorkerCount } from './parsePool';
 import { clearResolveCache, importResolvesToVue } from './resolve';
 
 export interface ScanOptions {
   include: string;
   exclude: string;
   includeImports: boolean;
+  parallel: boolean;
   resolver: ImportResolver;
 }
 
@@ -27,6 +29,7 @@ export function getScanOptions(): ScanOptions {
     include: config.get<string>('include', '**/*.{vue,js,ts,jsx,tsx,mjs,cjs}'),
     exclude: config.get<string>('exclude', '**/{node_modules,dist,.git}/**'),
     includeImports: config.get<boolean>('includeImports', true),
+    parallel: config.get<boolean>('parallelIndexing', true),
     resolver: importResolvesToVue,
   };
 }
@@ -35,6 +38,9 @@ export type ProgressReporter = (processed: number, total: number, found: number)
 
 /** Concurrency for file reads — I/O bound, so a generous pool hides latency. */
 const READ_CONCURRENCY = Math.max(8, os.cpus().length * 2);
+
+/** Below this many files to parse, worker startup isn't worth it — parse inline. */
+const WORKER_THRESHOLD = 200;
 
 /**
  * Reads a file's text. Prefers the in-memory content of an already-open editor
@@ -133,51 +139,124 @@ export async function buildProjectIndex(
 
   const index = new Map<string, Usage[]>();
   const seen = new Set<string>();
+  const mtimes = new Map<string, number>();
   let processed = 0;
   let total = 0;
 
+  // Merging is synchronous (single-threaded), so no locking is needed even when
+  // results arrive from multiple worker threads.
+  const merge = (fsPath: string, raw: RawUsage[]) => {
+    const uri = vscode.Uri.file(fsPath);
+    for (const r of raw) {
+      if (isRawFilteredOut(r, options)) {
+        continue;
+      }
+      const usage = rawToUsage(uri, r);
+      const bucket = index.get(r.key);
+      if (bucket) {
+        bucket.push(usage);
+      } else {
+        index.set(r.key, [usage]);
+      }
+      total++;
+    }
+  };
+  const tick = () => {
+    processed++;
+    if (onProgress && processed % 25 === 0) {
+      onProgress(processed, files.length, total);
+    }
+  };
+  const cacheSet = (fsPath: string, raw: RawUsage[]) => {
+    if (cache) {
+      const m = mtimes.get(fsPath);
+      if (m != null) {
+        cache.set(fsPath, m, raw);
+      }
+    }
+  };
+
+  // Phase 1 — check the cache; anything unchanged is merged straight away and
+  // everything else is queued for parsing.
+  const misses: string[] = [];
   await mapConcurrent(
     files,
     READ_CONCURRENCY,
     async (file) => {
       const fsPath = file.fsPath;
       seen.add(fsPath);
-
-      const mtime = cache ? await statMtime(fsPath) : null;
-      let raw: RawUsage[] | undefined;
-      if (cache && !force && mtime != null) {
-        raw = cache.get(fsPath, mtime);
-      }
-      if (raw === undefined) {
-        const text = await readFileText(file);
-        raw = text != null ? extractRawUsages(text, fsPath, options.resolver) : [];
-        if (cache && mtime != null) {
-          cache.set(fsPath, mtime, raw);
+      if (cache) {
+        const mtime = await statMtime(fsPath);
+        if (mtime != null) {
+          mtimes.set(fsPath, mtime);
+          if (!force) {
+            const raw = cache.get(fsPath, mtime);
+            if (raw !== undefined) {
+              merge(fsPath, raw);
+              tick();
+              return;
+            }
+          }
         }
       }
-
-      // The merge below is synchronous, so no locking is needed.
-      for (const r of raw) {
-        if (isRawFilteredOut(r, options)) {
-          continue;
-        }
-        const usage = rawToUsage(file, r);
-        const bucket = index.get(r.key);
-        if (bucket) {
-          bucket.push(usage);
-        } else {
-          index.set(r.key, [usage]);
-        }
-        total++;
-      }
-
-      processed++;
-      if (onProgress && processed % 25 === 0) {
-        onProgress(processed, files.length, total);
-      }
+      misses.push(fsPath);
     },
     token,
   );
+
+  if (token?.isCancellationRequested) {
+    return index;
+  }
+
+  // Phase 2 — parse the misses. Files open with unsaved edits are parsed inline
+  // (so their in-memory text is honored); the rest go to the worker pool.
+  const parseInline = async (fsPath: string) => {
+    if (token?.isCancellationRequested) {
+      return;
+    }
+    const text = await readFileText(vscode.Uri.file(fsPath));
+    const raw = text != null ? extractRawUsages(text, fsPath, options.resolver) : [];
+    cacheSet(fsPath, raw);
+    merge(fsPath, raw);
+    tick();
+  };
+
+  const dirty = new Set(
+    vscode.workspace.textDocuments.filter((d) => d.isDirty).map((d) => d.uri.fsPath),
+  );
+  const cleanMisses = misses.filter((p) => !dirty.has(p));
+  const dirtyMisses = misses.filter((p) => dirty.has(p));
+  const useWorkers =
+    options.parallel &&
+    recommendedWorkerCount() > 1 &&
+    cleanMisses.length >= WORKER_THRESHOLD;
+
+  const inlineFiles = useWorkers ? dirtyMisses : misses;
+  await mapConcurrent(inlineFiles, READ_CONCURRENCY, (p) => parseInline(p), token);
+
+  if (useWorkers) {
+    let pool: ParsePool | undefined;
+    try {
+      pool = new ParsePool(recommendedWorkerCount());
+      const activePool = pool;
+      const sub = token?.onCancellationRequested(() => void activePool.dispose());
+      await pool.run(
+        cleanMisses,
+        ({ fsPath, raw }) => {
+          cacheSet(fsPath, raw);
+          merge(fsPath, raw);
+          tick();
+        },
+        token,
+      );
+      sub?.dispose();
+    } catch {
+      // Worker threads unavailable in this host — parse inline as a fallback.
+      await mapConcurrent(cleanMisses, READ_CONCURRENCY, (p) => parseInline(p), token);
+    } finally {
+      await pool?.dispose();
+    }
+  }
 
   // Only prune on a complete run — a cancelled run has an incomplete `seen` set.
   if (cache && !token?.isCancellationRequested) {

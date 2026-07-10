@@ -87,6 +87,11 @@
           "default": true,
           "description": "Index all component usages once when a project opens, so the CodeLens and Find All References resolve instantly. Turn off to scan lazily on demand instead."
         },
+        "vueFindUsages.parallelIndexing": {
+          "type": "boolean",
+          "default": true,
+          "description": "Parse files across worker threads when building the index on large projects. Disable to index on a single thread."
+        },
         "vueFindUsages.codeLens.enabled": {
           "type": "boolean",
           "default": true,

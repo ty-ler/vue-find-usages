@@ -60,10 +60,16 @@ the index instead of each kicking off its own workspace scan.
 
 - The index updates **incrementally** as you edit — only the changed file is
   re-parsed, not the whole project.
+- A **persistent cache** (keyed by file mtime) means re-opening a project only
+  re-parses files that actually changed since last time — subsequent opens are
+  near-instant.
+- On large projects, files are parsed across **worker threads** so the CPU-bound
+  parsing runs in parallel. Progress shows in the status bar and clicking it
+  cancels; indexing runs in the background either way.
 - Turn it off with `vueFindUsages.indexOnOpen: false` to scan lazily on demand
-  instead (better if you rarely need usages in a very large repo).
+  instead, or `vueFindUsages.parallelIndexing: false` to index single-threaded.
 - Rebuild it manually anytime with **"Vue: Index Component Usages (rebuild)"** from
-  the Command Palette.
+  the Command Palette (this forces a full re-parse and refreshes the cache).
 
 ## Settings
 
@@ -73,6 +79,7 @@ the index instead of each kicking off its own workspace scan.
 | `vueFindUsages.exclude` | `**/{node_modules,dist,.git,.nuxt,.output,coverage}/**` | Files/folders to skip. |
 | `vueFindUsages.includeImports` | `true` | Also report imports and `components: {}` registrations, not just template tags. |
 | `vueFindUsages.indexOnOpen` | `true` | Index the whole project on open for instant lookups. |
+| `vueFindUsages.parallelIndexing` | `true` | Parse files across worker threads when indexing large projects. |
 | `vueFindUsages.codeLens.enabled` | `true` | Show the usage-count CodeLens above `<template>`. |
 | `vueFindUsages.references.enabled` | `true` | Contribute to Find All References (`Shift+F12`). |
 
@@ -114,7 +121,7 @@ both VS Code and Cursor).
 | `.vue` templates | `@vue/compiler-sfc` splits the SFC; `@vue/compiler-dom` parses the template to an element tree that is walked for component tags and `<component :is>`. |
 | `<script>` / `.ts` / `.js` | `@babel/parser` + `@babel/traverse` find import declarations and `components` registrations. |
 | Name equivalence | All names normalize to a single key, so PascalCase, kebab-case, and the file name all resolve to the same component. |
-| Speed | A one-pass project index groups usages by name; providers read from it and it updates per-file on change. |
+| Speed | Files are read via `fs` and parsed across worker threads into a one-pass index; a cheap byte pre-filter skips files with no component syntax, a persistent mtime cache reuses unchanged files across sessions, and the index updates per-file on change. |
 
 ## Limitations
 
