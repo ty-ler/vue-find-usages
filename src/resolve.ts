@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { getComponentExtensions } from './componentExt';
 
 /**
  * Best-effort module resolution used to decide whether a non-`.vue` import
@@ -42,10 +43,14 @@ export function importResolvesToVue(importerFsPath: string, specifier: string): 
 }
 
 function existsAsVue(target: string): boolean {
-  if (target.toLowerCase().endsWith('.vue')) {
+  const lower = target.toLowerCase();
+  const suffixes = getComponentExtensions();
+  if (suffixes.some((suf) => lower.endsWith(suf))) {
     return fileExists(target);
   }
-  return fileExists(target + '.vue') || fileExists(path.join(target, 'index.vue'));
+  return suffixes.some(
+    (suf) => fileExists(target + suf) || fileExists(path.join(target, 'index' + suf)),
+  );
 }
 
 function fileExists(p: string): boolean {

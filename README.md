@@ -29,7 +29,10 @@ forms resolve to one component — and a lookup for `Foo` will **not** falsely m
   the Options API.
 
 The component name is derived from the `.vue` file name. For `index.vue`, the parent
-folder name is used instead (a common Vue convention).
+folder name is used instead (a common Vue convention). If your project uses a custom
+SFC suffix such as `HomepageView.ts.vue` (type-checked SFCs), add it to
+`vueFindUsages.componentExtensions` so the name resolves to `HomepageView` rather than
+`HomepageView.ts`.
 
 ## How to use
 
@@ -78,6 +81,7 @@ the index instead of each kicking off its own workspace scan.
 | `vueFindUsages.include` | `**/*.{vue,js,ts,jsx,tsx,mjs,cjs}` | Files to search. |
 | `vueFindUsages.exclude` | `**/{node_modules,dist,.git,.nuxt,.output,coverage}/**` | Files/folders to skip. |
 | `vueFindUsages.includeImports` | `true` | Also report imports and `components: {}` registrations, not just template tags. |
+| `vueFindUsages.componentExtensions` | `[".vue"]` | File suffixes treated as SFCs; the component name is the file name with the matching suffix stripped. Add `.ts.vue` for type-checked SFCs (list every suffix, including `.vue`). |
 | `vueFindUsages.indexOnOpen` | `true` | Index the whole project on open for instant lookups. |
 | `vueFindUsages.parallelIndexing` | `true` | Parse files across worker threads when indexing large projects. |
 | `vueFindUsages.codeLens.enabled` | `true` | Show the usage-count CodeLens above `<template>`. |

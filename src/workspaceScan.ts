@@ -11,6 +11,7 @@ import {
   Usage,
 } from './scanner';
 import { extractRawUsages, RawUsage } from './scanCore';
+import { getComponentExtensions, setComponentExtensions } from './componentExt';
 import { IndexCache } from './indexCache';
 import { ParsePool, recommendedWorkerCount } from './parsePool';
 import { clearResolveCache, importResolvesToVue } from './resolve';
@@ -20,16 +21,20 @@ export interface ScanOptions {
   exclude: string;
   includeImports: boolean;
   parallel: boolean;
+  componentExtensions: string[];
   resolver: ImportResolver;
 }
 
 export function getScanOptions(): ScanOptions {
   const config = vscode.workspace.getConfiguration('vueFindUsages');
+  // Apply the configured component suffixes to this (main) thread up front.
+  setComponentExtensions(config.get<string[]>('componentExtensions', ['.vue']));
   return {
     include: config.get<string>('include', '**/*.{vue,js,ts,jsx,tsx,mjs,cjs}'),
     exclude: config.get<string>('exclude', '**/{node_modules,dist,.git}/**'),
     includeImports: config.get<boolean>('includeImports', true),
     parallel: config.get<boolean>('parallelIndexing', true),
+    componentExtensions: getComponentExtensions(),
     resolver: importResolvesToVue,
   };
 }
@@ -248,6 +253,7 @@ export async function buildProjectIndex(
           tick();
         },
         token,
+        options.componentExtensions,
       );
       sub?.dispose();
     } catch {

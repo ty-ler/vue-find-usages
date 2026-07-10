@@ -15,23 +15,39 @@ import {
   VueReferenceProvider,
 } from './providers';
 import { IndexCache } from './indexCache';
+import { getComponentExtensions, setComponentExtensions } from './componentExt';
 
 const VUE_SELECTOR: vscode.DocumentSelector = { scheme: 'file', pattern: '**/*.vue' };
 
 let usageIndex: UsageIndex;
 let usageCache: IndexCache | undefined;
+let cacheFileUri: vscode.Uri;
+let extensionVersion = '0.0.0';
 let activeIndexingCts: vscode.CancellationTokenSource | undefined;
+
+/** Reads the configured component suffixes and applies them to this thread. */
+function syncComponentExtensions(): void {
+  const list = vscode.workspace
+    .getConfiguration('vueFindUsages')
+    .get<string[]>('componentExtensions', ['.vue']);
+  setComponentExtensions(list);
+}
+
+/** Builds a cache whose version embeds the suffixes, so it invalidates on change. */
+function makeCache(): IndexCache {
+  const version = `${extensionVersion}#${getComponentExtensions().join('|')}`;
+  return new IndexCache(cacheFileUri, version);
+}
 
 export function activate(context: vscode.ExtensionContext) {
   usageIndex = new UsageIndex();
 
   // Persistent cache so re-opening the project only re-parses changed files.
   const storageBase = context.storageUri ?? context.globalStorageUri;
-  const version = context.extension?.packageJSON?.version ?? '0.0.0';
-  usageCache = new IndexCache(
-    vscode.Uri.joinPath(storageBase, 'index-cache.json'),
-    version,
-  );
+  extensionVersion = context.extension?.packageJSON?.version ?? '0.0.0';
+  cacheFileUri = vscode.Uri.joinPath(storageBase, 'index-cache.json');
+  syncComponentExtensions();
+  usageCache = makeCache();
 
   // Confirmation that the extension loaded. Appears in the Debug Console of the
   // window you launched from, and in Output → "Vue Find Usages".
@@ -60,6 +76,18 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   setupFileWatcher(context);
+
+  // Re-index when the component suffixes change (names and cache keys depend on
+  // them, so the whole index must be rebuilt with a fresh, invalidated cache).
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('vueFindUsages.componentExtensions')) {
+        syncComponentExtensions();
+        usageCache = makeCache();
+        void rebuildIndex(false);
+      }
+    }),
+  );
 
   // Optionally index the whole project up front so lookups are instant.
   const config = vscode.workspace.getConfiguration('vueFindUsages');

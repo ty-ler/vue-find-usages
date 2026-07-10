@@ -5,6 +5,7 @@ import { parse as babelParse, ParserPlugin } from '@babel/parser';
 import _traverse from '@babel/traverse';
 import * as t from '@babel/types';
 import { normalizeKey } from './names';
+import { componentBaseName, isComponentFile } from './componentExt';
 
 // @babel/traverse ships as CommonJS; under esModuleInterop the callable lives on
 // `.default` in some resolutions and is the module itself in others.
@@ -32,10 +33,10 @@ export interface RawUsage {
  * no component usage, so the expensive AST parse can be skipped. It must never
  * return false for a file that does contain a usage.
  */
-export function mightContainComponents(text: string, ext: string): boolean {
+export function mightContainComponents(text: string, isSfc: boolean): boolean {
   const hasScriptSignal = /\bimport\b/.test(text) || /\bcomponents\b/.test(text);
-  if (ext !== '.vue') {
-    // Non-`.vue` files only contribute imports and `components: {}` registrations.
+  if (!isSfc) {
+    // Non-SFC files only contribute imports and `components: {}` registrations.
     return hasScriptSignal;
   }
   return (
@@ -63,8 +64,8 @@ export function extractRawUsages(
   fsPath: string,
   resolver?: ImportResolver,
 ): RawUsage[] {
-  const ext = path.extname(fsPath).toLowerCase();
-  if (!mightContainComponents(text, ext)) {
+  const isSfc = isComponentFile(fsPath);
+  if (!mightContainComponents(text, isSfc)) {
     return [];
   }
 
@@ -90,10 +91,10 @@ export function extractRawUsages(
     }
   };
 
-  if (ext === '.vue') {
+  if (isSfc) {
     scanVue(text, collect, fsPath, resolver);
   } else {
-    scanScript(text, 0, scriptPlugins(ext), collect, fsPath, resolver);
+    scanScript(text, 0, scriptPlugins(path.extname(fsPath).toLowerCase()), collect, fsPath, resolver);
   }
 
   return out;
@@ -251,15 +252,20 @@ function scanScript(
     ImportDeclaration(pathNode) {
       const node = pathNode.node;
       const source = node.source.value;
-      const isVue = /\.vue$/i.test(source);
-      const stem = path.basename(source).replace(/\.\w+$/, '');
+      // An import whose path is itself a component file (e.g. `.vue`, `.ts.vue`).
+      const isComponentSource = isComponentFile(source);
+      // For component-file imports strip the full suffix (`.ts.vue` -> name).
+      const stem = isComponentSource
+        ? componentBaseName(source)
+        : path.basename(source).replace(/\.\w+$/, '');
 
       const isComponentImport =
-        isVue || (resolver ? resolver(importer, source) : undefined);
+        isComponentSource || (resolver ? resolver(importer, source) : undefined);
 
       for (const spec of node.specifiers) {
         const localName = spec.local.name;
-        const keep = isComponentImport ?? (!isVue ? /^[A-Z]/.test(localName) : true);
+        const keep =
+          isComponentImport ?? (!isComponentSource ? /^[A-Z]/.test(localName) : true);
         if (!keep) {
           continue;
         }
@@ -269,7 +275,7 @@ function scanScript(
         }
         const anchor = spec.local;
         if (anchor.start != null && anchor.end != null) {
-          const altNames = isVue ? [importedName, stem] : [importedName];
+          const altNames = isComponentSource ? [importedName, stem] : [importedName];
           collect(localName, 'import', base + anchor.start, base + anchor.end, altNames);
         }
       }

@@ -82,6 +82,16 @@
           "default": true,
           "description": "Also report import statements and component registrations, not just template tag usages."
         },
+        "vueFindUsages.componentExtensions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            ".vue"
+          ],
+          "description": "File suffixes treated as Vue single-file components. The component name is derived by stripping the matching suffix, so add e.g. \".ts.vue\" for type-checked SFCs (list every suffix you use, including \".vue\"). Also ensure vueFindUsages.include matches these files."
+        },
         "vueFindUsages.indexOnOpen": {
           "type": "boolean",
           "default": true,

@@ -1,4 +1,7 @@
 import * as path from 'path';
+import { componentBaseName } from './componentExt';
+
+export { componentBaseName } from './componentExt';
 
 export interface ComponentTarget {
   /** The canonical PascalCase component name, e.g. "UserCard". */
@@ -36,7 +39,7 @@ export function normalizeKey(s: string): string {
 
 /** Builds the component target from a `.vue` file path. */
 export function deriveTarget(fsPath: string): ComponentTarget {
-  let base = path.basename(fsPath, '.vue');
+  let base = componentBaseName(fsPath);
   // index.vue conventionally takes the component name from its folder.
   if (base.toLowerCase() === 'index') {
     const dir = path.basename(path.dirname(fsPath));
@@ -49,7 +52,7 @@ export function deriveTarget(fsPath: string): ComponentTarget {
     pascal,
     kebab: toKebabCase(base),
     key: normalizeKey(base),
-    fileBase: path.basename(fsPath, '.vue'),
+    fileBase: base,
   };
 }
 

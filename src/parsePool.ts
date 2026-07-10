@@ -40,11 +40,12 @@ export class ParsePool {
     files: string[],
     onResult: (result: ParseResult) => void,
     token?: CancelToken,
+    suffixes?: string[],
   ): Promise<void> {
     const chunks: string[][] = this.workers.map(() => []);
     files.forEach((f, i) => chunks[i % this.workers.length].push(f));
     return Promise.all(
-      this.workers.map((w, i) => this.runChunk(w, chunks[i], onResult, token)),
+      this.workers.map((w, i) => this.runChunk(w, chunks[i], onResult, token, suffixes)),
     ).then(() => undefined);
   }
 
@@ -53,6 +54,7 @@ export class ParsePool {
     files: string[],
     onResult: (result: ParseResult) => void,
     token?: CancelToken,
+    suffixes?: string[],
   ): Promise<void> {
     return new Promise((resolve) => {
       if (files.length === 0) {
@@ -79,7 +81,7 @@ export class ParsePool {
         worker.off('message', onMessage);
         resolve();
       });
-      worker.postMessage({ files });
+      worker.postMessage({ files, suffixes });
     });
   }
 
