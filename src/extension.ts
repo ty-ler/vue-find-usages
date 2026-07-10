@@ -5,7 +5,8 @@ import { Usage, UsageKind } from './scanner';
 import {
   buildProjectIndex,
   getScanOptions,
-  indexUsagesForDocument,
+  indexUsagesForFile,
+  readFileText,
   scanWorkspace,
 } from './workspaceScan';
 import {
@@ -116,12 +117,12 @@ function setupFileWatcher(context: vscode.ExtensionContext): void {
       usageIndex.clear();
       return;
     }
-    try {
-      const document = await vscode.workspace.openTextDocument(uri);
-      usageIndex.updateFile(uri, indexUsagesForDocument(document, getScanOptions()));
-    } catch {
+    const text = await readFileText(uri);
+    if (text == null) {
       usageIndex.removeUri(uri);
+      return;
     }
+    usageIndex.updateFile(uri, indexUsagesForFile(uri, text, getScanOptions()));
   };
 
   watcher.onDidCreate(reindexFile);
