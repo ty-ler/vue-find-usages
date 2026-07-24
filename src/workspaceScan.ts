@@ -19,7 +19,6 @@ import { clearResolveCache, importResolvesToVue } from './resolve';
 export interface ScanOptions {
   include: string;
   exclude: string;
-  includeImports: boolean;
   parallel: boolean;
   componentExtensions: string[];
   resolver: ImportResolver;
@@ -32,7 +31,6 @@ export function getScanOptions(): ScanOptions {
   return {
     include: config.get<string>('include', '**/*.{vue,js,ts,jsx,tsx,mjs,cjs}'),
     exclude: config.get<string>('exclude', '**/{node_modules,dist,.git}/**'),
-    includeImports: config.get<boolean>('includeImports', true),
     parallel: config.get<boolean>('parallelIndexing', true),
     componentExtensions: getComponentExtensions(),
     resolver: importResolvesToVue,
@@ -93,9 +91,7 @@ export async function scanWorkspace(
       const text = await readFileText(file);
       if (text != null) {
         for (const usage of findUsagesInDocument(file, text, target, options.resolver)) {
-          if (!isFilteredOut(usage, options)) {
-            found.push(usage);
-          }
+          found.push(usage);
         }
       }
       processed++;
@@ -109,15 +105,13 @@ export async function scanWorkspace(
   return found;
 }
 
-/** The usages of one file, honoring the includeImports option. */
+/** Every component usage in one file, retained for query-time filtering. */
 export function indexUsagesForFile(
   uri: vscode.Uri,
   text: string,
   options: ScanOptions,
 ): IndexedUsage[] {
-  return extractComponentUsages(uri, text, options.resolver).filter(
-    (u) => !isFilteredOut(u.usage, options),
-  );
+  return extractComponentUsages(uri, text, options.resolver);
 }
 
 /**
@@ -153,9 +147,6 @@ export async function buildProjectIndex(
   const merge = (fsPath: string, raw: RawUsage[]) => {
     const uri = vscode.Uri.file(fsPath);
     for (const r of raw) {
-      if (isRawFilteredOut(r, options)) {
-        continue;
-      }
       const usage = rawToUsage(uri, r);
       const bucket = index.get(r.key);
       if (bucket) {
@@ -278,16 +269,6 @@ async function statMtime(fsPath: string): Promise<number | null> {
   } catch {
     return null;
   }
-}
-
-const IMPORT_KINDS = new Set(['import', 'dynamic-import', 'registration']);
-
-function isFilteredOut(usage: Usage, options: ScanOptions): boolean {
-  return !options.includeImports && IMPORT_KINDS.has(usage.kind);
-}
-
-function isRawFilteredOut(raw: RawUsage, options: ScanOptions): boolean {
-  return !options.includeImports && IMPORT_KINDS.has(raw.kind);
 }
 
 /**

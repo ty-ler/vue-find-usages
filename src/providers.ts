@@ -6,6 +6,7 @@ import {
 } from './names';
 import { IndexedUsage, resolveComponentAt, Usage } from './scanner';
 import { getScanOptions, scanWorkspace } from './workspaceScan';
+import { filterUsages, getConfiguredUsageFilter } from './usageFilters';
 
 /**
  * The shared usage index: a map of normalized-component-key -> usages, read by
@@ -27,10 +28,6 @@ export class UsageIndex {
 
   getUsages(key: string): Usage[] | undefined {
     return this.map.get(key);
-  }
-
-  getCount(key: string): number | undefined {
-    return this.map.get(key)?.length;
   }
 
   /** Store the result of a single-component lazy scan. */
@@ -84,6 +81,11 @@ export class UsageIndex {
     }
   }
 
+  /** Notify consumers when presentation settings change without replacing data. */
+  refresh(): void {
+    this._onDidChange.fire();
+  }
+
   dispose(): void {
     this._onDidChange.dispose();
   }
@@ -112,17 +114,18 @@ export class VueReferenceProvider implements vscode.ReferenceProvider {
 
     const target = targetFromName(resolved.name);
 
-    let usages: Usage[];
+    let allUsages: Usage[];
     if (this.index.isBuilt()) {
-      usages = this.index.getUsages(target.key) ?? [];
+      allUsages = this.index.getUsages(target.key) ?? [];
     } else {
-      usages = await scanWorkspace(target, getScanOptions(), token);
-      this.index.setUsages(target.key, usages);
+      allUsages = await scanWorkspace(target, getScanOptions(), token);
+      this.index.setUsages(target.key, allUsages);
     }
 
     if (token.isCancellationRequested) {
       return undefined;
     }
+    const usages = filterUsages(allUsages, getConfiguredUsageFilter());
     return usages.map((u) => new vscode.Location(u.uri, u.range));
   }
 }
@@ -166,19 +169,19 @@ export class VueCodeLensProvider implements vscode.CodeLensProvider {
       return lens;
     }
 
-    let count: number;
+    let allUsages: Usage[];
     if (this.index.isBuilt()) {
-      count = this.index.getCount(target.key) ?? 0;
+      allUsages = this.index.getUsages(target.key) ?? [];
     } else {
-      const cached = this.index.getCount(target.key);
+      const cached = this.index.getUsages(target.key);
       if (cached !== undefined) {
-        count = cached;
+        allUsages = cached;
       } else {
-        const usages = await scanWorkspace(target, getScanOptions(), token);
-        this.index.setUsages(target.key, usages);
-        count = usages.length;
+        allUsages = await scanWorkspace(target, getScanOptions(), token);
+        this.index.setUsages(target.key, allUsages);
       }
     }
+    const count = filterUsages(allUsages, getConfiguredUsageFilter()).length;
 
     lens.command = {
       title:

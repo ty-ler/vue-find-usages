@@ -42,10 +42,13 @@ SFC suffix such as `HomepageView.ts.vue` (type-checked SFCs), add it to
 The extension activates automatically when you open a folder containing `.vue`
 files. There are three ways to look up usages:
 
-1. **Command** — open a `.vue` file (or right-click it in the Explorer) and run
-   **"Vue: Find Component Usages"** from the context menu or the Command Palette
-   (`Cmd/Ctrl+Shift+P`). Run it with nothing focused to pick a component from a list.
-   Results open in the peek-references view.
+1. **Command** — open a `.vue` file (or right-click it in the Explorer) and open
+   the **"Vue: Find Component Usages"** submenu. Choose **Configured Filters**,
+   **Template Usages Only**, **Import Usages Only**, **Registration Usages Only**,
+   or **All Component Usages**. The four presets override your settings for that
+   search only; they do not modify your configuration. The Command Palette
+   (`Cmd/Ctrl+Shift+P`) also provides these commands. Run one with nothing focused
+   to pick a component from a list. Results open in the peek-references view.
 2. **Find All References (`Shift+F12`)** — put the cursor on a component tag in a
    template (e.g. `<MyComponent>`), or anywhere in the component's own `.vue` file,
    and press `Shift+F12`. Usages appear in the native References panel. Pressing it
@@ -66,6 +69,9 @@ the index instead of each kicking off its own workspace scan.
 
 - The index updates **incrementally** as you edit — only the changed file is
   re-parsed, not the whole project.
+- The index retains every detected usage. Filters are applied when results are
+  displayed, so changing a setting or using a one-off preset does not require a
+  rebuild.
 - A **persistent cache** (keyed by file mtime) means re-opening a project only
   re-parses files that actually changed since last time — subsequent opens are
   near-instant.
@@ -83,12 +89,17 @@ the index instead of each kicking off its own workspace scan.
 | --- | --- | --- |
 | `vueFindUsages.include` | `**/*.{vue,js,ts,jsx,tsx,mjs,cjs}` | Files to search. |
 | `vueFindUsages.exclude` | `**/{node_modules,dist,.git,.nuxt,.output,coverage}/**` | Files/folders to skip. |
-| `vueFindUsages.includeImports` | `true` | Also report imports and `components: {}` registrations, not just template tags. |
+| `vueFindUsages.includeTemplateUsages` | `true` | Report component tags and literal dynamic components in templates. |
+| `vueFindUsages.includeImports` | `true` | Report static and dynamic component imports. |
+| `vueFindUsages.includeRegistrations` | `true` | Report Options API `components: {}` registrations. |
 | `vueFindUsages.componentExtensions` | `[".vue"]` | File suffixes treated as SFCs; the component name is the file name with the matching suffix stripped. Add `.ts.vue` for type-checked SFCs (list every suffix, including `.vue`). |
 | `vueFindUsages.indexOnOpen` | `true` | Index the whole project on open for instant lookups. |
 | `vueFindUsages.parallelIndexing` | `true` | Parse files across worker threads when indexing large projects. |
 | `vueFindUsages.codeLens.enabled` | `true` | Show the usage-count CodeLens above `<template>`. |
 | `vueFindUsages.references.enabled` | `true` | Contribute to Find All References (`Shift+F12`). |
+
+The three usage filters apply to the configured-filter command, CodeLens counts,
+and Find All References. Context-menu presets are one-off overrides.
 
 ## Develop / run locally
 

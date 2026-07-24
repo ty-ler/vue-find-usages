@@ -16,6 +16,16 @@ import {
 } from './providers';
 import { IndexCache } from './indexCache';
 import { getComponentExtensions, setComponentExtensions } from './componentExt';
+import {
+  affectsUsageFilters,
+  ALL_USAGE_FILTER,
+  filterUsages,
+  getConfiguredUsageFilter,
+  IMPORTS_ONLY_USAGE_FILTER,
+  REGISTRATIONS_ONLY_USAGE_FILTER,
+  TEMPLATE_ONLY_USAGE_FILTER,
+  UsageFilter,
+} from './usageFilters';
 
 const VUE_SELECTOR: vscode.DocumentSelector = { scheme: 'file', pattern: '**/*.vue' };
 
@@ -59,6 +69,22 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('vueFindUsages.findUsages', (uri?: vscode.Uri) =>
       findUsages(uri),
     ),
+    vscode.commands.registerCommand(
+      'vueFindUsages.findTemplateUsages',
+      (uri?: vscode.Uri) => findUsages(uri, TEMPLATE_ONLY_USAGE_FILTER),
+    ),
+    vscode.commands.registerCommand(
+      'vueFindUsages.findImportUsages',
+      (uri?: vscode.Uri) => findUsages(uri, IMPORTS_ONLY_USAGE_FILTER),
+    ),
+    vscode.commands.registerCommand(
+      'vueFindUsages.findRegistrationUsages',
+      (uri?: vscode.Uri) => findUsages(uri, REGISTRATIONS_ONLY_USAGE_FILTER),
+    ),
+    vscode.commands.registerCommand(
+      'vueFindUsages.findAllUsages',
+      (uri?: vscode.Uri) => findUsages(uri, ALL_USAGE_FILTER),
+    ),
     vscode.commands.registerCommand('vueFindUsages.indexProject', () =>
       rebuildIndex(true, true),
     ),
@@ -85,6 +111,9 @@ export function activate(context: vscode.ExtensionContext) {
         syncComponentExtensions();
         usageCache = makeCache();
         void rebuildIndex(false);
+      }
+      if (affectsUsageFilters(e)) {
+        usageIndex.refresh();
       }
     }),
   );
@@ -188,7 +217,10 @@ function setupFileWatcher(context: vscode.ExtensionContext): void {
   context.subscriptions.push(watcher);
 }
 
-async function findUsages(uri?: vscode.Uri): Promise<void> {
+async function findUsages(
+  uri?: vscode.Uri,
+  filterOverride?: UsageFilter,
+): Promise<void> {
   const targetUri = await resolveTargetFile(uri);
   if (!targetUri) {
     return;
@@ -196,12 +228,12 @@ async function findUsages(uri?: vscode.Uri): Promise<void> {
 
   const target = deriveTarget(targetUri.fsPath);
 
-  let usages: Usage[] | undefined;
+  let allUsages: Usage[] | undefined;
   if (usageIndex.isBuilt()) {
     // Instant: the project is already indexed.
-    usages = usageIndex.getUsages(target.key) ?? [];
+    allUsages = usageIndex.getUsages(target.key) ?? [];
   } else {
-    usages = await vscode.window.withProgress(
+    allUsages = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
         title: `Finding usages of <${target.pascal}>`,
@@ -212,12 +244,16 @@ async function findUsages(uri?: vscode.Uri): Promise<void> {
           progress.report({ message: `${processed}/${total} files, ${found} matches` });
         }),
     );
-    if (usages === undefined) {
+    if (allUsages === undefined) {
       return;
     }
-    usageIndex.setUsages(target.key, usages);
+    usageIndex.setUsages(target.key, allUsages);
   }
 
+  const usages = filterUsages(
+    allUsages,
+    filterOverride ?? getConfiguredUsageFilter(),
+  );
   await presentResults(targetUri, target, usages);
 }
 

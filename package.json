@@ -2,7 +2,7 @@
   "name": "vue-find-usages",
   "displayName": "Vue: Find Component Usages",
   "description": "Find all usages of a Vue component across your workspace (template tags, imports, and registrations).",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "publisher": "ty-ler",
   "license": "MIT",
   "icon": "images/icon.png",
@@ -36,26 +36,75 @@
     "commands": [
       {
         "command": "vueFindUsages.findUsages",
-        "title": "Vue: Find Component Usages"
+        "title": "Configured Filters",
+        "category": "Vue: Find Component Usages"
+      },
+      {
+        "command": "vueFindUsages.findTemplateUsages",
+        "title": "Template Usages Only",
+        "category": "Vue: Find Component Usages"
+      },
+      {
+        "command": "vueFindUsages.findImportUsages",
+        "title": "Import Usages Only",
+        "category": "Vue: Find Component Usages"
+      },
+      {
+        "command": "vueFindUsages.findRegistrationUsages",
+        "title": "Registration Usages Only",
+        "category": "Vue: Find Component Usages"
+      },
+      {
+        "command": "vueFindUsages.findAllUsages",
+        "title": "All Component Usages",
+        "category": "Vue: Find Component Usages"
       },
       {
         "command": "vueFindUsages.indexProject",
         "title": "Vue: Index Component Usages (rebuild)"
       }
     ],
+    "submenus": [
+      {
+        "id": "vueFindUsages.findUsagesSubmenu",
+        "label": "Vue: Find Component Usages"
+      }
+    ],
     "menus": {
       "editor/context": [
         {
-          "command": "vueFindUsages.findUsages",
+          "submenu": "vueFindUsages.findUsagesSubmenu",
           "when": "resourceExtname == .vue",
           "group": "navigation@99"
         }
       ],
       "explorer/context": [
         {
-          "command": "vueFindUsages.findUsages",
+          "submenu": "vueFindUsages.findUsagesSubmenu",
           "when": "resourceExtname == .vue",
           "group": "4_search@1"
+        }
+      ],
+      "vueFindUsages.findUsagesSubmenu": [
+        {
+          "command": "vueFindUsages.findUsages",
+          "group": "1_filter@1"
+        },
+        {
+          "command": "vueFindUsages.findTemplateUsages",
+          "group": "1_filter@2"
+        },
+        {
+          "command": "vueFindUsages.findImportUsages",
+          "group": "1_filter@3"
+        },
+        {
+          "command": "vueFindUsages.findRegistrationUsages",
+          "group": "1_filter@4"
+        },
+        {
+          "command": "vueFindUsages.findAllUsages",
+          "group": "1_filter@5"
         }
       ],
       "commandPalette": [
@@ -77,10 +126,20 @@
           "default": "**/{node_modules,dist,.git,.nuxt,.output,coverage}/**",
           "description": "Glob pattern for files/folders to exclude from the search."
         },
+        "vueFindUsages.includeTemplateUsages": {
+          "type": "boolean",
+          "default": true,
+          "description": "Report component tags and literal dynamic components in Vue templates."
+        },
         "vueFindUsages.includeImports": {
           "type": "boolean",
           "default": true,
-          "description": "Also report import statements and component registrations, not just template tag usages."
+          "description": "Report static and dynamic imports of Vue components."
+        },
+        "vueFindUsages.includeRegistrations": {
+          "type": "boolean",
+          "default": true,
+          "description": "Report components registered in Options API components objects."
         },
         "vueFindUsages.componentExtensions": {
           "type": "array",
