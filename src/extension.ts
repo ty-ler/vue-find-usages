@@ -34,6 +34,7 @@ let usageCache: IndexCache | undefined;
 let cacheFileUri: vscode.Uri;
 let extensionVersion = '0.0.0';
 let activeIndexingCts: vscode.CancellationTokenSource | undefined;
+let fileWatcherDisposable: vscode.Disposable | undefined;
 
 /** Reads the configured component suffixes and applies them to this thread. */
 function syncComponentExtensions(): void {
@@ -101,19 +102,30 @@ export function activate(context: vscode.ExtensionContext) {
     ),
   );
 
-  setupFileWatcher(context);
+  installFileWatcher();
+  context.subscriptions.push({
+    dispose: () => fileWatcherDisposable?.dispose(),
+  });
 
-  // Re-index when the component suffixes change (names and cache keys depend on
-  // them, so the whole index must be rebuilt with a fresh, invalidated cache).
+  // Re-index when settings that change indexed data or scan scope change.
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('vueFindUsages.componentExtensions')) {
         syncComponentExtensions();
         usageCache = makeCache();
         void rebuildIndex(false);
+        return;
       }
       if (affectsUsageFilters(e)) {
         usageIndex.refresh();
+      }
+      const includeChanged = e.affectsConfiguration('vueFindUsages.include');
+      const excludeChanged = e.affectsConfiguration('vueFindUsages.exclude');
+      if (includeChanged) {
+        installFileWatcher();
+      }
+      if (includeChanged || excludeChanged) {
+        void rebuildIndex(false);
       }
     }),
   );
@@ -190,10 +202,11 @@ async function rebuildIndex(announce: boolean, force = false): Promise<void> {
   }
 }
 
-/** Keeps the index fresh as files change. */
-function setupFileWatcher(context: vscode.ExtensionContext): void {
-  const options = getScanOptions();
-  const watcher = vscode.workspace.createFileSystemWatcher(options.include);
+/** Keeps the index fresh as files change. Recreate when include changes. */
+function installFileWatcher(): void {
+  fileWatcherDisposable?.dispose();
+
+  const watcher = vscode.workspace.createFileSystemWatcher(getScanOptions().include);
 
   const reindexFile = async (uri: vscode.Uri) => {
     if (!usageIndex.isBuilt()) {
@@ -214,7 +227,7 @@ function setupFileWatcher(context: vscode.ExtensionContext): void {
   watcher.onDidDelete((uri) =>
     usageIndex.isBuilt() ? usageIndex.removeUri(uri) : usageIndex.clear(),
   );
-  context.subscriptions.push(watcher);
+  fileWatcherDisposable = watcher;
 }
 
 async function findUsages(

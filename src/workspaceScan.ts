@@ -30,7 +30,10 @@ export function getScanOptions(): ScanOptions {
   setComponentExtensions(config.get<string[]>('componentExtensions', ['.vue']));
   return {
     include: config.get<string>('include', '**/*.{vue,js,ts,jsx,tsx,mjs,cjs}'),
-    exclude: config.get<string>('exclude', '**/{node_modules,dist,.git}/**'),
+    exclude: config.get<string>(
+      'exclude',
+      '**/{node_modules,dist,out,.git,.nuxt,.output,coverage}/**',
+    ),
     parallel: config.get<boolean>('parallelIndexing', true),
     componentExtensions: getComponentExtensions(),
     resolver: importResolvesToVue,

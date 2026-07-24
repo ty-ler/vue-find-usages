@@ -80,6 +80,8 @@ the index instead of each kicking off its own workspace scan.
   cancels; indexing runs in the background either way.
 - Turn it off with `vueFindUsages.indexOnOpen: false` to scan lazily on demand
   instead, or `vueFindUsages.parallelIndexing: false` to index single-threaded.
+- Changing `include`, `exclude`, or `componentExtensions` triggers a background
+  re-index; changing the usage-filter settings only refreshes displayed results.
 - Rebuild it manually anytime with **"Vue: Index Component Usages (rebuild)"** from
   the Command Palette (this forces a full re-parse and refreshes the cache).
 
@@ -88,7 +90,7 @@ the index instead of each kicking off its own workspace scan.
 | Setting | Default | Description |
 | --- | --- | --- |
 | `vueFindUsages.include` | `**/*.{vue,js,ts,jsx,tsx,mjs,cjs}` | Files to search. |
-| `vueFindUsages.exclude` | `**/{node_modules,dist,.git,.nuxt,.output,coverage}/**` | Files/folders to skip. |
+| `vueFindUsages.exclude` | `**/{node_modules,dist,out,.git,.nuxt,.output,coverage}/**` | Files/folders to skip. |
 | `vueFindUsages.includeTemplateUsages` | `true` | Report component tags and literal dynamic components in templates. |
 | `vueFindUsages.includeImports` | `true` | Report static and dynamic component imports. |
 | `vueFindUsages.includeRegistrations` | `true` | Report Options API `components: {}` registrations. |
